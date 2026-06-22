@@ -1,0 +1,60 @@
+Untuk referensi: 
+1. Sipas.tasanahdigital.com
+     User: admin
+     Pass: admin
+     User: pimpinan
+     Pass: 123456
+
+
+Konsep Aplikasi SIASEPP KECe
+==============================
+1. Ada 5 user privillages
+	- Kepala Dinas
+	- Sekretaris
+	- Kasubag Umum
+	- Pengagenda
+	- Unit Kerja
+
+2. Menu
+	MASTER
+	- Indeks Surat
+	- Unit Kerja
+	- Users
+
+	REGISTRASI
+	- Surat Masuk
+	- Surat Keluar
+
+	DISPOSISI
+	-Surat Masuk
+
+	APPROVAL
+	-Surat Keluar
+
+3. Flow
+	MASTERING
+	1. [Pengagenda] - Melakukan input / register master indeks.
+	2. [Pengagenda] - Melakukan input / register unit kerja apa saja yang ada di dinas.
+	3. [Sekretaris] - Yang berhak mendaftarkan user di aplikasi SIASEPP KECe.
+
+	SURAT MASUK
+	1. [Pengagenda] - selaku PIC menerima surat kemudian melakukan scan dan soft copy surat di upload ke aplikasi SIASEPP KECe.
+	2. [Pengagenda] - Setelah surat di upload, surat diteruskan ke KASUBAG UMUM
+	3. [Kasubag Umum] - Setelah menerima surat dari PENGAGENDA, kemudian surat di teruskan (Disposisi) ke Sekretaris.
+	4. [Kasubag Umum] - Selain disposisi ke SEKRETARIS, surat juga bisa diteruskan unit kerja di dinas.
+	5. [Sekretaris] - Setelah menerima surat dari KASUBAG UMUM, kemudian surat diteruskan (Disposisi) ke KEPALA DINAS.
+	6. [Sekretaris] - Selain disposisi ke KEPALA DINAS, surat juga bisa diteruskan unit kerja di dinas.
+	7. [Kepala Dinas] - Setelah menerima surat dari SEKRETARIS, kemudian surat diteruskan (Disposisi) ke unit kerja di dinas.
+
+	SURAT KELUAR
+	1. [Unit Kerja] - Membuat surat yang akan diterbitkan, kemudian menyerahkan ke PENGAGENDA.
+	2. [Pengagenda] - Melakukan upload surat.
+	3. [Pengagenda] - Meneruskan surat (Disposisi) ke KASUBAG UMUM untuk di paraf.
+	4. [Kasubag Umum] - Mendowload dan melakukan paraf (manual), setelah selesai di paraf dokumen diserahkan ke PENGAGENDA.
+	5. [Pengagenda] - Menerima dokumen yang sudah di paraf, melakukan scan, dan upload surat ke aplikasi.
+	6. [Pengagenda] - Meneruskan surat ke SEKRETARIS.
+	7. [Sekretaris] - Mendowload dan melakukan paraf (manual), setelah selesai di paraf dokumen diserahkan ke PENGAGENDA.
+	8. [Pengagenda] - Menerima dokumen yang sudah di paraf, melakukan scan, dan upload surat ke aplikasi.
+	9. [Pengagenda] - Meneruskan surat ke KEPALA DINAS.
+	10. [Kepala Dinas] - Mendowload dan melakukan Tanda Tangan (manual), setelah selesai di Tanda tangani dokumen diserahkan ke PENGAGENDA.
+	11. [Pengagenda] - Menerima dokumen yang sudah di tanda tangani, memberikan penomoran surat, dan melakukan upload surat ke aplikasi.
