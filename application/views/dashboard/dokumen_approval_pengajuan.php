@@ -52,7 +52,7 @@
                 <div class="card-header">
                     <div class="row">
                         <div class="col-md-6">
-                            <h3 class="card-title">Input Pengajuan Dokumen</h3>
+                            <h3 class="card-title" id="form-title">Input Pengajuan Dokumen</h3>
                         </div>
                         <div class="col-md-6 text-right">
                             <button class="btn btn-danger btn-sm" id="btn-hide"><i class="fas fa-minus-circle"></i> Sembunyikan</button>
@@ -60,6 +60,7 @@
                     </div>
                 </div>
                 <form id="form-input" enctype="multipart/form-data">
+                    <input type="hidden" id="document_id" name="document_id">
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
@@ -93,6 +94,7 @@
                                         <input type="file" class="custom-file-input" id="file" name="file" accept="application/pdf">
                                         <label class="custom-file-label" for="file">Choose file</label>
                                     </div>
+                                    <small class="form-text text-muted" id="file-helper" style="display: none;">Kosongkan jika tidak ingin mengganti file PDF.</small>
                                 </div>
                                 <div class="form-group">
                                     <label>Ringkasan</label>
@@ -102,7 +104,7 @@
                         </div>
                     </div>
                     <div class="card-footer">
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Ajukan Approval</button>
+                        <button type="submit" class="btn btn-primary" id="btn-submit"><i class="fas fa-paper-plane"></i> Ajukan Approval</button>
                     </div>
                 </form>
             </div>
@@ -232,8 +234,12 @@
             }, {
                 data: null,
                 className: 'text-center',
-                render: function() {
-                    return '<button type="button" class="btn btn-info btn-xs btn-detail"><i class="fas fa-eye"></i> Detail</button>';
+                render: function(data, type, row) {
+                    var html = '<button type="button" class="btn btn-info btn-xs btn-detail"><i class="fas fa-eye"></i> Detail</button>';
+                    if (row.status !== 'approved') {
+                        html += ' <button type="button" class="btn btn-warning btn-xs btn-edit"><i class="fas fa-edit"></i> Edit</button>';
+                    }
+                    return html;
                 }
             }],
             dom: '<"row" <"col-md-6" B><"col-md-6" f>>rtip',
@@ -247,6 +253,21 @@
 
     function reload_table() {
         $('#table-document').DataTable().ajax.reload(null, false);
+    }
+
+    function reset_form(mode) {
+        $('#form-input')[0].reset();
+        $('#document_id').val('');
+        $('#file').next('.custom-file-label').html('Choose file');
+        $('#file-helper').hide();
+
+        if (mode === 'edit') {
+            $('#form-title').text('Edit Pengajuan Dokumen');
+            $('#btn-submit').html('<i class="fas fa-save"></i> Simpan Perubahan');
+        } else {
+            $('#form-title').text('Input Pengajuan Dokumen');
+            $('#btn-submit').html('<i class="fas fa-paper-plane"></i> Ajukan Approval');
+        }
     }
 
     function render_status(status) {
@@ -290,11 +311,13 @@
     }
 
     $('#btn-add').on('click', function() {
+        reset_form('add');
         $('#list-document').hide();
         $('#form-document').show(500);
     });
 
     $('#btn-hide').on('click', function() {
+        reset_form('add');
         $('#form-document').hide();
         $('#list-document').show(500);
     });
@@ -308,8 +331,11 @@
         e.preventDefault();
 
         var formData = new FormData(this);
+        var isEdit = $('#document_id').val() !== '';
+        var url = isEdit ? '<?= base_url('dashboard/update_doc_approval_pengajuan') ?>' : '<?= base_url('dashboard/simpan_doc_approval_pengajuan') ?>';
+
         $.ajax({
-            url: '<?= base_url('dashboard/simpan_doc_approval_pengajuan') ?>',
+            url: url,
             type: 'post',
             data: formData,
             dataType: 'json',
@@ -319,8 +345,7 @@
             success: function(response) {
                 Swal.fire(response.status === 'success' ? 'Success!' : 'Error!', response.message, response.status);
                 if (response.status === 'success') {
-                    $('#form-input')[0].reset();
-                    $('#file').next('.custom-file-label').html('Choose file');
+                    reset_form('add');
                     reload_table();
                     $('#form-document').hide();
                     $('#list-document').show(500);
@@ -339,6 +364,37 @@
         }
         show_detail(row);
     });
+
+    $('#table-document').on('click', '.btn-edit', function() {
+        var row = $('#table-document').DataTable().row($(this).closest('tr')).data();
+        if (!row) {
+            row = $('#table-document').DataTable().row($(this).closest('tr').prev()).data();
+        }
+        edit_document(row);
+    });
+
+    function edit_document(row) {
+        if (!row) {
+            return;
+        }
+
+        reset_form('edit');
+        $('#document_id').val(row.id);
+        $('#title').val(row.title || '');
+        $('#document_number').val(row.document_number || '');
+        $('#document_date').val(row.document_date_raw || '');
+        $('#category').val(row.category || '');
+        $('#flow_id').val(row.flow_id || '');
+        $('#summary').val(row.summary || '');
+        $('#file-helper').show();
+
+        if (row.original_file) {
+            $('#file').next('.custom-file-label').html(row.original_file);
+        }
+
+        $('#list-document').hide();
+        $('#form-document').show(500);
+    }
 
     function show_detail(row) {
         $('#detail-title').text(row.title || '-');

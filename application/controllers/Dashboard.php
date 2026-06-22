@@ -1882,6 +1882,7 @@ class Dashboard extends CI_Controller
                 'id' => $row->id,
                 'title' => $row->title,
                 'document_number' => $row->document_number,
+                'document_date_raw' => !empty($row->document_date) && $row->document_date !== '0000-00-00' ? $row->document_date : '',
                 'document_date' => !empty($row->document_date) && $row->document_date !== '0000-00-00' ? date('d-F-Y', strtotime($row->document_date)) : '-',
                 'category' => $row->category,
                 'summary' => $row->summary,
@@ -1991,23 +1992,11 @@ class Dashboard extends CI_Controller
             return;
         }
 
-        $config['upload_path'] = './assets/dokumen_approval/';
-        $config['allowed_types'] = 'pdf|PDF';
-        $config['max_size'] = 100024;
-        $config['encrypt_name'] = true;
-
-        if (!is_dir($config['upload_path'])) {
-            mkdir($config['upload_path'], 0755, true);
-        }
-
-        $this->load->library('upload', $config);
-        $this->upload->initialize($config);
-        if (!$this->upload->do_upload('file')) {
+        $upload = $this->_upload_doc_approval_file('file');
+        if (!$upload['status']) {
             $this->_json_response('error', $this->upload->display_errors('', ''));
             return;
         }
-
-        $upload = $this->upload->data();
 
         $this->db->trans_start();
         $this->db->insert('doc_approval_documents', array(
@@ -2016,7 +2005,7 @@ class Dashboard extends CI_Controller
             'document_date' => $document_date,
             'category' => $category,
             'summary' => $summary,
-            'original_file' => $upload['file_name'],
+            'original_file' => $upload['data']['file_name'],
             'status' => 'submitted',
             'flow_id' => $flow_id,
             'submitted_by' => $this->session->userdata('userid'),
@@ -2042,6 +2031,143 @@ class Dashboard extends CI_Controller
             $this->db->trans_status() ? 'success' : 'error',
             $this->db->trans_status() ? 'Dokumen berhasil diajukan approval.' : 'Dokumen gagal diajukan approval.'
         );
+    }
+
+    public function update_doc_approval_pengajuan()
+    {
+        $document_id = (int) $this->input->post('document_id');
+        $title = trim((string) $this->input->post('title'));
+        $document_number = trim((string) $this->input->post('document_number'));
+        $document_date = $this->input->post('document_date');
+        $category = trim((string) $this->input->post('category'));
+        $summary = trim((string) $this->input->post('summary'));
+        $flow_id = (int) $this->input->post('flow_id');
+
+        if ($document_id <= 0) {
+            $this->_json_response('error', 'Dokumen tidak valid.');
+            return;
+        }
+
+        if ($title === '' || $document_number === '' || $document_date === '' || $flow_id <= 0) {
+            $this->_json_response('error', 'Judul, nomor dokumen, tanggal dokumen, dan flow approval wajib diisi.');
+            return;
+        }
+
+        $document = $this->db
+            ->where('id', $document_id)
+            ->where('submitted_by', $this->session->userdata('userid'))
+            ->get('doc_approval_documents')
+            ->row_array();
+
+        if (!$document) {
+            $this->_json_response('error', 'Dokumen tidak ditemukan atau bukan milik Anda.');
+            return;
+        }
+
+        if ($document['status'] === 'approved') {
+            $this->_json_response('error', 'Dokumen yang sudah disetujui tidak bisa diedit.');
+            return;
+        }
+
+        $flow = $this->db->get_where('doc_approval_flows', array('id' => $flow_id, 'is_active' => 1))->row_array();
+        $first_step = $this->db->where('flow_id', $flow_id)->order_by('step_order', 'ASC')->get('doc_approval_steps')->row_array();
+        if (!$flow || !$first_step || !in_array($flow['document_type'], array('dokumen', 'semua'), true)) {
+            $this->_json_response('error', 'Flow approval dokumen tidak valid.');
+            return;
+        }
+
+        $new_file = '';
+        if (!empty($_FILES['file']['name'])) {
+            $upload = $this->_upload_doc_approval_file('file');
+            if (!$upload['status']) {
+                $this->_json_response('error', $this->upload->display_errors('', ''));
+                return;
+            }
+            $new_file = $upload['data']['file_name'];
+        }
+
+        $document_data = array(
+            'title' => $title,
+            'document_number' => $document_number,
+            'document_date' => $document_date,
+            'category' => $category,
+            'summary' => $summary,
+            'status' => 'submitted',
+            'flow_id' => $flow_id,
+            'submitted_at' => date('Y-m-d H:i:s'),
+            'completed_at' => null,
+            'updated_at' => date('Y-m-d H:i:s')
+        );
+
+        if ($new_file !== '') {
+            $document_data['original_file'] = $new_file;
+        }
+
+        $request = $this->db
+            ->where('document_type', 'dokumen')
+            ->where('document_id', $document_id)
+            ->get('doc_approval_requests')
+            ->row_array();
+
+        $this->db->trans_start();
+        $this->db->update('doc_approval_documents', $document_data, array('id' => $document_id));
+
+        if ($request) {
+            $this->db->delete('doc_approval_actions', array('request_id' => $request['id']));
+            $this->db->update('doc_approval_requests', array(
+                'flow_id' => $flow_id,
+                'current_step_order' => $first_step['step_order'],
+                'status' => 'submitted',
+                'submitted_at' => date('Y-m-d H:i:s'),
+                'completed_at' => null
+            ), array('id' => $request['id']));
+        } else {
+            $this->db->insert('doc_approval_requests', array(
+                'document_type' => 'dokumen',
+                'document_id' => $document_id,
+                'flow_id' => $flow_id,
+                'current_step_order' => $first_step['step_order'],
+                'status' => 'submitted',
+                'submitted_by' => $this->session->userdata('userid'),
+                'submitted_by_name' => $this->session->userdata('name'),
+                'submitted_at' => date('Y-m-d H:i:s')
+            ));
+        }
+
+        $this->db->trans_complete();
+
+        if ($this->db->trans_status() && $new_file !== '' && !empty($document['original_file'])) {
+            $old_file = FCPATH.'assets/dokumen_approval/'.$document['original_file'];
+            if (is_file($old_file)) {
+                @unlink($old_file);
+            }
+        }
+
+        $this->_json_response(
+            $this->db->trans_status() ? 'success' : 'error',
+            $this->db->trans_status() ? 'Dokumen berhasil diperbarui dan diajukan ulang.' : 'Dokumen gagal diperbarui.'
+        );
+    }
+
+    private function _upload_doc_approval_file($field)
+    {
+        $config['upload_path'] = './assets/dokumen_approval/';
+        $config['allowed_types'] = 'pdf|PDF';
+        $config['max_size'] = 100024;
+        $config['encrypt_name'] = true;
+
+        if (!is_dir($config['upload_path'])) {
+            mkdir($config['upload_path'], 0755, true);
+        }
+
+        $this->load->library('upload', $config);
+        $this->upload->initialize($config);
+
+        if (!$this->upload->do_upload($field)) {
+            return array('status' => false, 'data' => null);
+        }
+
+        return array('status' => true, 'data' => $this->upload->data());
     }
 
     public function simpan_doc_approval_flow()
